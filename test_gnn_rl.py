@@ -10,39 +10,52 @@ WS_PORT = 8765
 
 async def agent_loop(websocket, path):
     """
-    Handles a WebSocket client connection and streams actions each step.
+    Handles a WebSocket client connection and streams actions step-by-step.
+    Runs SUMO episodes in an infinite loop until client disconnects.
     """
     sumo_cfg = "data/net.sumocfg"
-    env = SumoEnvironment(sumo_cfg, sumo_binary="sumo-gui", num_node_features=3, num_actions=3)
 
     # must match training config
     agent = GNN_DQNAgent(num_node_features=3, hidden_dim=64, num_actions=3)
     agent.load("data/gnn_dqn.pth")
 
-    state = env.reset()
-    total_reward = 0
-    done = False
+    while True:  # keep running episodes until client disconnects
+        env = SumoEnvironment(
+            sumo_cfg=sumo_cfg,
+            sumo_binary="sumo-gui",
+            num_node_features=3,
+            num_actions=3
+        )
 
-    while not done:
-        state_x, edge_index = state
+        state = env.reset()
+        total_reward = 0.0
+        done = False
 
-        # Agent picks per-node actions (deterministic during test)
-        actions = agent.act(state_x, edge_index, epsilon=0.0)
+        while not done:
+            state_x, edge_index = state
 
-        # Send actions over WebSocket
-        message = {
-            "actions": actions.tolist(),
-            "step": env.step_count
-        }
-        await websocket.send(json.dumps(message))
+            # Agent picks per-node actions (deterministic during test)
+            actions = agent.act(state_x, edge_index, epsilon=0.0)
 
-        # Step SUMO
-        next_state, reward, done = env.step(actions)
-        state = next_state
-        total_reward += reward
+            # Send actions over WebSocket
+            message = {
+                "actions": actions.tolist(),
+                "step": env.step_count
+            }
+            try:
+                await websocket.send(json.dumps(message))
+            except websockets.ConnectionClosed:
+                print("❌ Client disconnected")
+                env.close()
+                return
 
-    print(f"✅ Test run finished | Total Reward: {total_reward:.2f}")
-    env.close()
+            # Step SUMO
+            next_state, reward, done = env.step(actions)
+            state = next_state
+            total_reward += reward
+
+        print(f"✅ Episode finished | Total Reward: {total_reward:.2f}")
+        env.close()
 
 
 async def main():
@@ -52,4 +65,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("🛑 Server stopped by user")
