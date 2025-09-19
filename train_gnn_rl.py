@@ -87,7 +87,7 @@ epsilon_decay = 0.995   # decay rate per episode
 
 # Path to SUMO config (adjust path if needed)
 sumo_cfg = "data/net.sumocfg"
-sumo_binary = "sumo-gui"   # use "sumo-gui" for visualization, "sumo" for fast training
+sumo_binary = "sumo"   # use "sumo-gui" for visualization, "sumo" for fast training
 
 # ----------------------------
 # Init environment & agent
